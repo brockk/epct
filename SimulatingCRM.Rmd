@@ -1,0 +1,143 @@
+---
+title: "Hands-on CRM - Simulating Performance"
+author: "Kristian Brock"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_notebook:
+    theme: cerulean
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width = 10)
+knitr::opts_chunk$set(fig.height = 8)
+```
+
+## Introduction
+This R-notebook lets you perform elementary simulations using the Continual Reassessment Method (CRM) to appraise performance in dose-escalation trials.
+
+We will require several R packages. 
+We should have already installed those together.
+If not, run through `InstallPrerequisites.R` to check everything is present before you run through this workbook.
+
+```{r}
+library(dfcrm)
+library(dplyr)
+library(ggplot2)
+```
+
+## What are simulations?
+
+Simulations are virtual trials.
+They are particularly useful to learn about the behaviours of adaptive designs like those used in dose-finding trials.
+
+To run simulations, we choose a trial design parameterisation that we wish to learn about.
+This could be the parameterisation that we are considering using in real life, or some speculative alteration that we are thinking of making.
+We then use a computer to conduct a virtual trial, randomly sampling outcomes like presence of DLT from probability distributions that reflect the assumed nature of reality, fitting the model to the outcomes, and then taking the model advice.
+We repeat this hundreds or thousands of times.
+
+That _nature of reality_ is what we are studying in the trial.
+In a CRM dose-finding trial, it would be the true underlying dose-toxicity curve.
+It is assumed because, in real life, we cannot observe it but we can observe outcomes that are dictated by it. 
+
+Running simulations requires that:
+
+1. we can specify a parameterisation for our model;
+2. we can specify the assumed nature of reality;
+3. we have working computer code.
+
+Jobs 1 and 2 are our responsibility.
+On job 3, we get a helping hand from authors of computer packages.
+We will use the fantastic [dfcrm](https://cran.r-project.org/package=dfcrm) package written by Ken Cheung of Columbia University.
+
+
+## Performing simulations
+
+### Scenario 1 in Iasonos _et al._(2008)
+Let us attempt to reproduce the operating characteristics published by Iasonos _et al._ in their paper (2008) comparing the 3+3 and CRM methods for dose-finding.
+In their paper, the authors use different skeletons and true toxicity curves in each scenario (see their Table 1) and a toxicity target of 25%.
+
+The parameters for scenario 1 are:
+```{r}
+target <- 0.25
+skeleton <- c(0.25, 0.30, 0.40, 0.50, 0.55)
+truth <- c(0.03, 0.05, 0.1, 0.18, 0.22)
+```
+
+We see in `truth` that the fifth dose has toxicity rate closest to our target, 25%, and is thus the best candidate for TD25 from those doses on offer.
+
+How often is that dose selected by the design?
+How often is it given to patients?
+We answer these questions with simulations.
+
+The command below simulates 1000 iterations.
+It takes a few seconds to run.
+```{r}
+set.seed(123)
+
+sims <- crmsim(
+  PI = truth, 
+  prior = skeleton, 
+  target = target, 
+  n = 24, 
+  x0 = 1,
+  nsim = 1000,
+  mcohort = 3, 
+  count = FALSE
+)
+```
+
+The command `set.seed` ensures that we will get the same answer if we run the code twice, even though the patients outcomes are randomly sampled, by setting the state of the random number generator.
+
+The parameter `n = 24` tells the software to use 24 patients in each simulated trial.
+The parameter `x0 = 1` tells the software to start at the first (and lowest) dose.
+The parameter `mcohort = 3` tells the software to administer doses to cohorts of three and thus re-evaluate the recommended dose after every third patient.
+Setting `count = FALSE` merely tells the code to not print messages to the console after each iteration. 
+The returned object called `sims` contains information that answers the questions we posed above.
+
+In what percentage of simulated trials was each dose finally proposed as the MTD?
+```{r}
+sims$MTD
+```
+
+We see that the design correctly identifies dose 5 to be TD25 in about 67% of iterations.
+So, if the true dose-toxicity curve does in reality match our assumption, we can expect the design we have proposed to correctly identify TD25 approximately two-thirds of the time.
+
+In their publication (Table 2), the authors derive probabilities between 61%-66% using 7 different variants of the CRM model.
+None of those variants precisely matches the approach we have simulated here because of differences in software implementation.
+We can safely say though that we appear to be simulating approximately the same thing and we have produced evidence that is broadly in agreement with Iasonos _et al._'s findings.
+
+How often is this dose given to patients?
+This is the average number of patients at each dose in each trial:
+```{r}
+sims$level
+```
+
+We see that just over 6 patients are treated at dose 5, on average.
+To express this as a percentage, we can run:
+
+```{r}
+sims$level / sum(sims$level)
+```
+
+to learn dose 5 is given to about 27% of patients.
+The original authors estimated in their model that uses cohorts of 3 (G-CRM) that about 20% of patients were treated at dose 5.
+Our answers are comparable, but different enough to suggest there is some difference in our designs.
+
+Is the performance we have simulated acceptable?
+That varies by scenario, but I can say from experience that a 67% chance of correctly identifying the best dose, and a 90% chance of identifying one of the two best doses, is pretty good performance for a dose-finding trial with $n=24$ patients.
+
+However, this is only one scenario and we have no right to assume that reality will match our assumptions.
+Seeking to satisfy ourselves that the design will perform well over a range of scenarios, we would simulate many different scenarios.
+That is exactly what Iasonos _et al._ did.
+
+## Exercise
+
+Simulate CRM performance in scenarios 2 and 3 of Iasonos _et al._
+In their Table 1, what we call `truth`, they have labelled "True toxicity" and what we call `skeleton` they have labelled "A priori toxicity rates".
+Replicating the steps above, calculate simulated performance and compare it to theirs in Table 2.
+Are they similar?
+
+

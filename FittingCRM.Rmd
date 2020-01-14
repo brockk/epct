@@ -1,0 +1,165 @@
+---
+title: "Hands-on CRM - Fitting the Model"
+author: "Kristian Brock"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_notebook:
+    theme: cerulean
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width = 10)
+knitr::opts_chunk$set(fig.height = 8)
+```
+
+## Introduction
+This R-notebook lets you fit the Continual Reassessment Method (CRM) to some observed DLT observations in a dose-escalation trial.
+
+We will require several R packages. 
+We should have already installed those together.
+If not, run through `InstallPrerequisites.R` to check everything is present before you run through this workbook.
+
+```{r}
+library(dfcrm)
+library(dplyr)
+library(ggplot2)
+library(trialr)
+```
+
+## Model parameters
+We must define the rate of toxicity that we target:
+```{r}
+target <- 0.25
+```
+
+Necessarily with a CRM approach, we expect that the probabilities of efficacy and toxicity will increase with dose.
+This target is the rate of toxicity that we deem justifiable in pursuit of efficacy.
+
+We must also specify the skeleton, our initial guess at the probability of toxicity at each dose.
+If we have a view on the rate of toxicity at each dose, we can define this explicitly as a vector of numerical values in R:
+```{r}
+skeleton <- c(0.01, 0.05, 0.1, 0.25, 0.5)
+```
+
+Alternatively, if we only have an idea at which dose the toxicity target will be, the `getprior` function in the `dfcrm` package will generate a skeleton for us.
+Let us generate a skeleton with `getprior` that expects the third of five doses to be TD25:
+
+```{r}
+skeleton <- getprior(halfwidth = 0.1, target = target, nu = 3, 
+                     nlevel = 5) %>% round(3)
+skeleton
+```
+
+The parameters above warrant some explanation.
+Higher values for the `halfwidth` parameter will give steeper curves. 
+Using the value 0.05 or 0.1 normally suffices.
+We tell the function our toxicity `target`, and also the position of the dose that we expect to be closest to the target using `nu`.
+Lastly, we tell the function how many doses we are investigating via `nlevel`.
+The `getprior` function then fits a good candidate skeleton to these parameters.
+The bit of code that says `%>% round(3)` merely expresses the vector of numbers to three decimal places.
+
+We can visualise the skeleton generated:
+
+```{r}
+num_dose <- length(skeleton)
+dose_data <- data.frame(Dose = 1:num_dose, ProbTox = skeleton)
+
+ggplot(dose_data, aes(x = Dose, y = ProbTox)) + 
+  geom_point() + 
+  geom_line() + 
+  geom_hline(yintercept = target, col = 'red', linetype = 'dashed')
+```
+
+The function ensures that the skeleton is smoothly increasing with plausibly-spcaed out toxicity probabilities.
+The plot above shows that dose 3 is our prior guess for TD25, as stipulated by `nu = 3` in the call to `getprior`.
+
+## Fitting model to data
+
+Let us say we have observed outcomes `1NNN 2TNT`.
+Given our parameterisation, we wonder what the model will recommend next.
+We must *fit* the model to the data.
+This means calculating values for the free parameters in the model that best support the observed outcomes and model assumptions.
+
+We can _parse_ this outcome string to create a data-frame reflecting doses given and toxicity outcomes:
+```{r}
+outcomes <- '1NNN 2TNT'
+outcomes_df <- df_parse_outcomes(outcomes, as.list = FALSE)
+outcomes_df
+```
+
+We can then fit the model to the outcome data:
+```{r}
+crm_fit1 <- crm(prior = skeleton, target = target, 
+                tox = outcomes_df$tox, level = outcomes_df$doses)
+```
+
+We had to tell the `crm` function in the `dfcrm` package:
+
+* our dose-toxicity skeleton, using the alias it expects, `prior`
+* our toxicity `target`
+* the observed sequence of whether DLT was observed or not using the indicative values 0 & 1, under the alias `tox`
+* the administered sequence of dose indices, i.e. 1 for dose 1, etc, under the alias `level`.
+
+Notice that the `tox` and `level` sequences were just columns plucked from the `outcomes_df` object that we created?
+We could instead have written:
+
+```{r}
+crm_fit1 <- crm(prior = skeleton, target = target, 
+                tox = c(0,0,0, 1,0,1), level = c(1,1,1, 2,2,2))
+
+```
+
+This would have yielded the same results.
+In the first example, the `df_parse_outcomes` function saved us some tedious typing.
+
+The returned object called `crm_fit1` contains information on the fit model, including the model's recommendation for the next dose:
+
+```{r}
+crm_fit1
+```
+
+The `Ptox` column shows the _posterior_ estimate of the probabilities of toxicity at each dose.
+This estimate combines our initial beliefs that were reflected by the `skeleton` and the outcomes observed.
+We see that the estimated toxicity rates are quite high.
+This is because we have observed two DLTs in three patients at dose 2, a realised DLT-rate much higher than the 8% we specified in our `skeleton`.
+The columns `LoLmt` and `UpLmt` show the approximate lower and upper confidence interval limits on the toxicity rate.
+We see that those intervals are quite wide.
+For example, although dose 2 is now expected to produce DLT with probability 36%, the confidence interval spans 11% to 63%, a stark demonstration of how uncertain this model still is.
+After all, we have only evaluated six patients!
+The model will get more precise with greater sample size.
+
+The dose recommended by the model for the next group of patients is dose 1 because it has posterior probability of toxicity that is closes to the toxicity target.
+
+We can visualise our posterior dose-toxicity beliefs and our skeleton on the same plot:
+
+```{r}
+dose_data <- data.frame(
+  Dose = 1:num_dose, 
+  ProbTox = c(crm_fit1$ptox, skeleton),
+  Series = rep(c('Posterior', 'Skeleton'), each = num_dose)
+)
+
+ggplot(dose_data, aes(x = Dose, y = ProbTox)) + 
+  geom_point() + 
+  geom_line(aes(col = Series)) + 
+  geom_hline(yintercept = target, col = 'red', linetype = 'dashed')
+```
+
+Notice how the posterior curve is always higher than the skeleton?
+This is because the outcomes observed more toxicity than was expected by our skeleton.
+The posterior belief is a combination of the skeleton and the data.
+This means that the red dashed line representing the toxicity target intersects the posterior line at a lower dose-level, thus de-escalation is warranted.
+
+## Exercise
+
+Can you fit a CRM model to the outcomes `1NNN 2TNT 1NNN 2NNN`?
+
+* What dose is recommended for the fifth cohort? 
+* Why?
+* Can you visualise the posterior and skeleton dose-toxicity curves?
+* How close is the model to recommending the next higher dose?
+
+
