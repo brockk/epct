@@ -1,0 +1,91 @@
+---
+title: "Fixed-n trial design exercises"
+author: "NAME HERE"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+This notebook will take you through the exercises in the 3.3 - Fixed-n phase II designs lecture
+
+
+
+## Source files and packages
+```{r}
+source()
+source()
+library(clinfun)
+nfleming <- function(alpha, beta, p0, p1) {
+  n = (((qnorm(alpha / 2) * sqrt(p0 * (1 - p0))) + 
+          (qnorm(beta / 2) * sqrt(p1 * (1 - p1))))^2) / (p1 - p0)^2
+  print(n)
+}
+```
+
+## Exercise - Calculate $N_F$ for given parameters
+A clinician wishes to run a phase II trial to investigate a new immunotherapy treatments 
+effectiveness in treating late stage Non-Small-Cell Lung cancer. A response rate lower than 
+25% would indicate the treatment is ineffective, whilst a response rate higher than 35% would
+warrant further investigation in a phase III trial. Determine N as per flemings design provided,
+the type I and type II error rates are set at 0.10 and 0.20 respectively. 
+
+
+```{r}
+nfleming(alpha, beta, p0, p1)
+```
+
+## Exercise - Determine optimal and minimax designs for Simon's two-stage
+For the same proposed trial above determine n for the optimal and minimax Simon's designs
+```{r}
+ph2simon(pu, pa, ep1, ep2, nmax)
+```
+
+Investigate what happens to n, if response rate of interest is increased by 10%
+```{r}
+ph2simon(pu, pa, ep1, ep2, nmax)
+```
+
+Investigate what happens to n, if you lower the type I error rate
+```{r}
+ph2simon(pu, pa, ep1, ep2, nmax)
+```
+> Do these changes to n make sense?
+
+## Exercise - Calculate error rates for a Simon’s two-stage design
+If we are instead limited by recruitment in that we can only recruit 60 patients maximum.
+Calculate the error rates for a design with 20 patients in stage 1 and a stage 1 critical value of 4, 
+with an additional 40 patients in stage 2 with a final critical value of 18.
+```{r}
+Simons2Stage(n1, r1, n, r, p0, p1, n2)
+```
+
+## Exercise - Calculate Jung’s design error rates 
+Determine the type I and type II error rates for a single stage Jung's design, 
+with an an overall sample size of 54, and an overall critical required difference of 5. The values of
+0.15 and 0.30 are the response rates for the control and experimental arms respectively.
+```{r}
+Jungserr(n, a, p0, p1)
+```
+>Try to vary n and a, what do you notice about the error rates?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
