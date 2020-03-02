@@ -1,24 +1,18 @@
 
-if(!require(bcrm)) {
-  install.packages('bcrm')
-}
+library(dplyr)
+# install.packages('dplyr')
 
-if(!require(dfcrm)) {
-  install.packages('dfcrm')
-}
+library(ggplot2)
+# install.packages('ggplot2')
 
-if(!require(trialr)) {
-  install.packages('trialr')
-}
+library(devtools)
+# install.packages('devtools')
 
-if(!require(dplyr)) {
-  install.packages('dplyr')
-}
+library(bcrm)
+# install.packages('bcrm')
 
-if(!require(ggplot2)) {
-  install.packages('ggplot2')
-}
+library(dfcrm)
+# install.packages('dfcrm')
 
-if(!require(devtools)) {
-  install.packages('devtools')
-}
+library(trialr)
+# install.packages('trialr')
